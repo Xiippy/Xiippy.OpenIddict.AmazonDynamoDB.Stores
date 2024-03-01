@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>5.1.0</Version>
+    <Authors>Anton Ganhammar</Authors>
+    <RepositoryUrl>https://github.com/ganhammar/OpenIddict.AmazonDynamoDB</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ganhammar/OpenIddict.AmazonDynamoDB</PackageProjectUrl>
+    <Description>DynamoDB integration for OpenIddict</Description>
+    <PackageTags>OpenIddict, DynamoDB</PackageTags>
+    <PackageId>Community.OpenIddict.AmazonDynamoDB</PackageId>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.203.15" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="OpenIddict.Abstractions" Version="5.2.0" />
+    <PackageReference Include="OpenIddict.Core" Version="5.2.0" />
+  </ItemGroup>
+
+</Project>
