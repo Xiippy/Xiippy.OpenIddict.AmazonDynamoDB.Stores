@@ -1,4 +1,5 @@
 ﻿using Amazon.DynamoDBv2.DataModel;
+using OpenIddict.AmazonDynamoDB.DynamoDbTypeConverters;
 
 namespace OpenIddict.AmazonDynamoDB;
 
@@ -8,7 +9,7 @@ public class OpenIddictDynamoDbAuthorization
   [DynamoDBHashKey]
   public string PartitionKey
   {
-    get => $"AUTHORIZATION#{Id}";
+    get => $"AUTHORIZATION";
     private set { }
   }
   [DynamoDBRangeKey]
@@ -33,6 +34,7 @@ public class OpenIddictDynamoDbAuthorization
     get => $"APPLICATION#{ApplicationId}#STATUS#{Status}#TYPE#{Type}";
     set { }
   }
-  [DynamoDBProperty("ttl", storeAsEpoch: true)]
-  public DateTime? TTL { get; set; }
+  //[DynamoDBProperty("ttl", storeAsEpoch: true)]
+  [DynamoDBProperty(typeof(DynamoDBDateTimeOffset))]
+  public DateTimeOffset? TTL { get; set; }
 }

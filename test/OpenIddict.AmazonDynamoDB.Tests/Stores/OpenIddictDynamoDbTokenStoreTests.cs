@@ -133,13 +133,14 @@ public class OpenIddictDynamoDbTokenStoreTests
     var token = new OpenIddictDynamoDbToken
     {
       Subject = Guid.NewGuid().ToString(),
+      Id= Guid.NewGuid().ToString(),
     };
 
     // Act
     await tokenStore.CreateAsync(token, CancellationToken.None);
 
     // Assert
-    var databaseToken = await context.LoadAsync<OpenIddictDynamoDbToken>(token.PartitionKey, token.SortKey);
+    var databaseToken = await context.LoadAsync<OpenIddictDynamoDbToken>(  token.PartitionKey, token.SortKey);
     Assert.NotNull(databaseToken);
     Assert.Equal(token.Subject, databaseToken.Subject);
   }
@@ -167,6 +168,7 @@ public class OpenIddictDynamoDbTokenStoreTests
     var tokenStore = new OpenIddictDynamoDbTokenStore<OpenIddictDynamoDbToken>(options);
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
     var token = new OpenIddictDynamoDbToken();
+    token.Id = Guid.NewGuid().ToString();
     await tokenStore.CreateAsync(token, CancellationToken.None);
 
     // Act
@@ -902,6 +904,8 @@ public class OpenIddictDynamoDbTokenStoreTests
     var tokenStore = new OpenIddictDynamoDbTokenStore<OpenIddictDynamoDbToken>(options);
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
     var token = new OpenIddictDynamoDbToken();
+    
+
     await tokenStore.CreateAsync(token, CancellationToken.None);
 
     // Act
