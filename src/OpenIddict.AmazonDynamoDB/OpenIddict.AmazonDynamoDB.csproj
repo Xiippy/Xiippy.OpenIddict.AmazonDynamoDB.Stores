@@ -5,11 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Version>5.1.0</Version>
-    <Authors>Anton Ganhammar</Authors>
-    <RepositoryUrl>https://github.com/ganhammar/OpenIddict.AmazonDynamoDB</RepositoryUrl>
+    <Authors>Xiippy.ai</Authors>
+    <RepositoryUrl>https://github.com/Xiippy/Xiippy.OpenIddict.AmazonDynamoDB.Stores</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/ganhammar/OpenIddict.AmazonDynamoDB</PackageProjectUrl>
-    <Description>DynamoDB integration for OpenIddict</Description>
+    <PackageProjectUrl>https://xiippy.ai</PackageProjectUrl>
+    <Description>DynamoDB integration for OpenIddict 5+</Description>
     <PackageTags>OpenIddict, DynamoDB</PackageTags>
     <PackageId>Community.OpenIddict.AmazonDynamoDB</PackageId>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -25,5 +25,34 @@
     <PackageReference Include="OpenIddict.Abstractions" Version="5.2.0" />
     <PackageReference Include="OpenIddict.Core" Version="5.2.0" />
   </ItemGroup>
+<PropertyGroup>
+    <PackageId>Xiippy.OpenIddict.AmazonDynamoDB.Stores</PackageId>
+    <Version>5.1</Version>
 
+	<Title>Data storage implementations on top of DynamoDB for OpenIDDict 5+ Xiippy.OpenIddict.AmazonDynamoDB.Stores</Title>
+
+    <Company>Xiippy.ai</Company>
+	 <PackageProjectUrl>https://xiippy.ai</PackageProjectUrl>
+	 <RepositoryUrl>https://github.com/Xiippy/Xiippy.OpenIddict.AmazonDynamoDB.Stores</RepositoryUrl>
+	 <PackageLicenseExpression>MIT</PackageLicenseExpression>
+     <Summary>Xiippy's implementation of data storage implementations on top of DynamoDB for OpenIDDict 5+ which is Xiippy's port of https://github.com/ganhammar/OpenIddict.AmazonDynamoDB/ to OpenIDDict 5.1 with new interface implementations.</Summary>
+    <PackageTags>Xiippy.OpenIddict.AmazonDynamoDB.Stores;OpenIDDict;DynamoDB;Store</PackageTags>
+
+
+    <Description>
+      Xiippy's implementation of data storage implementations on top of DynamoDB for OpenIDDict 5+ which is Xiippy's port of https://github.com/ganhammar/OpenIddict.AmazonDynamoDB/ to OpenIDDict 5.1 with new interface implementations.
+    </Description>
+    <ReleaseNotes>Required to use OpenIDDict with DynamoDB</ReleaseNotes>
+    <Authors>https://Xiippy.ai</Authors>
+    <Owners>https://Xiippy.ai</Owners>
+    <Copyright>Copyright 2024 Xiippy.ai</Copyright>
+    <License>MIT</License>
+    <PackageOutputPath>bin\Package</PackageOutputPath>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- ... -->
+    <PackageReference Include="NuGet.Build.Tasks.Pack" PrivateAssets="All" Version="6.9.1" />
+    <!-- ... -->
+  </ItemGroup>
 </Project>

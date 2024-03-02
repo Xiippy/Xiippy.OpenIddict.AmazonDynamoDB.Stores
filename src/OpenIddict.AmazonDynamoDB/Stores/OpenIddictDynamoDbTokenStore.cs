@@ -39,7 +39,7 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
     _context = new DynamoDBContext(_client);
   }
 
-  public async ValueTask<long> CountAsyncOLD(CancellationToken cancellationToken)
+  public async ValueTask<long> CountAsync(CancellationToken cancellationToken)
   {
     var count = new CountModel(CountType.Token);
     count = await _context.LoadAsync<CountModel>(count.PartitionKey, count.SortKey, cancellationToken);
@@ -47,31 +47,6 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
     return count?.Count ?? 0;
   }
 
-
-  public async ValueTask<long> CountAsync(CancellationToken cancellationToken)
-  {
-    var search = _context.FromQueryAsync<TToken>(
-      new QueryOperationConfig
-      {
-        Select = SelectValues.AllAttributes,
-        KeyExpression = new Amazon.DynamoDBv2.DocumentModel.Expression
-        {
-          ExpressionStatement = $"{nameof(OpenIddictDynamoDbToken.PartitionKey)} = :PK and begins_with({nameof(OpenIddictDynamoDbToken.SortKey)}, :prefix)",
-          ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> {
-                        {":PK", "TOKEN" },
-                        { ":prefix", "#TOKEN"},
-                    }
-        }
-
-      });
-
-
-    var tokens = await search.GetRemainingAsync(cancellationToken);
-
-
-
-    return tokens?.Count ?? 0;
-  }
 
   public ValueTask<long> CountAsync<TResult>(Func<IQueryable<TToken>, IQueryable<TResult>> query, CancellationToken cancellationToken)
   {
@@ -84,9 +59,9 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
 
     await _context.SaveAsync(token, cancellationToken);
 
-    /* var count = await CountAsync(cancellationToken);
-     var newCount = count + 1;
-     await _context.SaveAsync(new CountModel(CountType.Token, newCount), cancellationToken);*/
+    var count = await CountAsync(cancellationToken);
+    var newCount = count + 1;
+    await _context.SaveAsync(new CountModel(CountType.Token, newCount), cancellationToken);
   }
 
   public async ValueTask DeleteAsync(TToken token, CancellationToken cancellationToken)
@@ -95,8 +70,8 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
 
     await _context.DeleteAsync(token, cancellationToken);
 
-    /* var count = await CountAsync(cancellationToken);
-     await _context.SaveAsync(new CountModel(CountType.Token, count - 1), cancellationToken);*/
+    var count = await CountAsync(cancellationToken);
+    await _context.SaveAsync(new CountModel(CountType.Token, count - 1), cancellationToken);
   }
 
   private IAsyncEnumerable<TToken> FindBySubjectAndSearchKey(string subject, string searchKey, CancellationToken cancellationToken)
@@ -458,7 +433,6 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
 
     var tokens = await search.GetRemainingAsync(cancellationToken);
 
-    var totalsCount = tokens?.Count ?? 0;
 
     var remainingTokens = new List<TToken>();
 
@@ -505,76 +479,14 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
 
     await batchDelete.ExecuteAsync(cancellationToken);
 
+    var count = await CountAsync(cancellationToken);
+    await _context.SaveAsync(new CountModel(CountType.Token, count - deleteCount), cancellationToken);
 
-    return totalsCount - deleteCount;
+    return count - deleteCount;
   }
 
 
 
-  /*public async ValueTask<long> PruneAsyncOLD(DateTimeOffset threshold, CancellationToken cancellationToken)
-  {
-    var deleteCount = 0;
-    // Get all tokens which is older than threshold
-    var filter = new ScanFilter();
-    filter.AddCondition("CreationDate", ScanOperator.LessThan, new List<AttributeValue>
-    {
-      new(threshold.UtcDateTime.ToString("o")),
-    });
-    var search = _context.FromScanAsync<TToken>(new ScanOperationConfig
-    {
-      Filter = filter,
-    });
-    var tokens = await search.GetRemainingAsync(cancellationToken);
-    var remainingTokens = new List<TToken>();
-
-    var batchDelete = _context.CreateBatchWrite<TToken>();
-
-    // Add tokens which is not Inactive/Valid or where ExpirationDate has passed to delete batch
-    foreach (var token in tokens)
-    {
-      if (new[] { Statuses.Inactive, Statuses.Valid }.Contains(token.Status) == false
-        || token.ExpirationDate < DateTime.UtcNow)
-      {
-        batchDelete.AddDeleteItem(token);
-        deleteCount++;
-      }
-      else
-      {
-        remainingTokens.Add(token);
-      }
-    }
-
-    // Get all authorizations connected to the remaining tokens
-    var authorizations = _context.CreateBatchGet<OpenIddictDynamoDbAuthorization>();
-    var authorizationIds = remainingTokens
-      .Select(x => x.AuthorizationId)
-      .Where(x => x != default)
-      .Distinct();
-    foreach (var authorizationId in authorizationIds)
-    {
-      var authorization = new OpenIddictDynamoDbAuthorization
-      {
-        Id = authorizationId!,
-      };
-      authorizations.AddKey(authorization.Id, authorization.SortKey);
-    }
-    await authorizations.ExecuteAsync(cancellationToken);
-
-    // Add tokens which has invalid authorizations to delete batch
-    foreach (var authorization in authorizations.Results.Where(x => x.Status != Statuses.Valid))
-    {
-      var tokensToDelete = remainingTokens
-        .Where(x => x.AuthorizationId == authorization.Id);
-      batchDelete.AddDeleteItems(tokensToDelete);
-      deleteCount += tokensToDelete.Count();
-    }
-
-    await batchDelete.ExecuteAsync(cancellationToken);
-
-    var count = await CountAsync(cancellationToken);
-    await _context.SaveAsync(new CountModel(CountType.Token, count - deleteCount), cancellationToken);
-    return count;
-  }*/
   public ValueTask SetApplicationIdAsync(TToken token, string? identifier, CancellationToken cancellationToken)
   {
     ArgumentNullException.ThrowIfNull(token);
