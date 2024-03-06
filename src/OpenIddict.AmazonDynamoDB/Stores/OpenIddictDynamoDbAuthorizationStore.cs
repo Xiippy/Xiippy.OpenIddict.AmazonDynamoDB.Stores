@@ -7,7 +7,6 @@ using System.Text.Json;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
-using Amazon.DynamoDBv2.Model;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using OpenIddict.AmazonDynamoDB.DynamoDbTypeConverters;
@@ -94,12 +93,23 @@ public class OpenIddictDynamoDbAuthorizationStore<TAuthorization> : IOpenIddictA
         },
       });
 
-      var authorizations = await search.GetRemainingAsync(cancellationToken);
 
-      foreach (var authorization in authorizations)
+      do
       {
-        yield return authorization;
-      }
+        var getNextBatch = search.GetNextSetAsync(cancellationToken);
+        var docList = await getNextBatch;
+        foreach (var item in docList)
+        {
+          yield return item;
+        }
+
+
+      } while (!search.IsDone);
+
+
+
+
+   
     }
   }
 
@@ -188,12 +198,19 @@ public class OpenIddictDynamoDbAuthorizationStore<TAuthorization> : IOpenIddictA
         },
       });
 
-      var authorizations = await search.GetRemainingAsync(cancellationToken);
-
-      foreach (var authorization in authorizations)
+      do
       {
-        yield return authorization;
-      }
+        var getNextBatch = search.GetNextSetAsync(cancellationToken);
+        var docList = await getNextBatch;
+        foreach (var item in docList)
+        {
+          yield return item;
+        }
+
+
+      } while (!search.IsDone);
+
+
     }
   }
 
@@ -225,12 +242,19 @@ public class OpenIddictDynamoDbAuthorizationStore<TAuthorization> : IOpenIddictA
         },
       });
 
-      var authorizations = await search.GetRemainingAsync(cancellationToken);
-
-      foreach (var authorization in authorizations)
+      do
       {
-        yield return authorization;
-      }
+        var getNextBatch = search.GetNextSetAsync(cancellationToken);
+        var docList = await getNextBatch;
+        foreach (var item in docList)
+        {
+          yield return item;
+        }
+
+
+      } while (!search.IsDone);
+
+
     }
   }
 
@@ -404,8 +428,16 @@ public class OpenIddictDynamoDbAuthorizationStore<TAuthorization> : IOpenIddictA
 
     });
 
+    var authorizations = new List<TAuthorization>();
+    do
+    {
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      authorizations.AddRange(docList);
 
-    var authorizations = await search.GetRemainingAsync(cancellationToken);
+
+    } while (!search.IsDone);
+
 
     var remainingAdHocAuthorizations = new List<TAuthorization>();
 
@@ -440,7 +472,18 @@ public class OpenIddictDynamoDbAuthorizationStore<TAuthorization> : IOpenIddictA
           }
         },
       });
-      var tokens = await tokensQuery.GetRemainingAsync(cancellationToken);
+
+
+      var tokens = new List<OpenIddictDynamoDbToken>();
+      do
+      {
+        var getNextBatch = tokensQuery.GetNextSetAsync(cancellationToken);
+        var docList = await getNextBatch;
+        tokens.AddRange(docList);
+
+
+      } while (!search.IsDone);
+
 
       if (tokens.Any() == false)
       {

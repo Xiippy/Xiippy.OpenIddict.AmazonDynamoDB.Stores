@@ -1,8 +1,9 @@
-# Xiippy.OpenIddict.AmazonDynamoDB.Stores
+﻿# Xiippy.OpenIddict.AmazonDynamoDB.Stores
 
 
 Xiippy's port of https://github.com/ganhammar/OpenIddict.AmazonDynamoDB/ to OpenIDDict 5.1 with new interface implementations
 
+Critical: Data schema for tokens and authorizations have been modified to improve performance and reduce costs by avoiding the use of the DynamoDB SCAN operation. Feel free to use for fresh starts but if you have a running system, you may need to migrate data to make everything work as before smoothly after upgrading to this version! 
 
 ![Build Status](https://github.com/ganhammar/OpenIddict.AmazonDynamoDB/actions/workflows/ci-cd.yml/badge.svg) [![codecov](https://codecov.io/gh/ganhammar/OpenIddict.AmazonDynamoDB/branch/main/graph/badge.svg?token=S4M1VCX8J6)](https://codecov.io/gh/ganhammar/OpenIddict.AmazonDynamoDB) [![NuGet](https://img.shields.io/nuget/v/Community.OpenIddict.AmazonDynamoDB)](https://www.nuget.org/packages/Community.OpenIddict.AmazonDynamoDB)
 

@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -7,7 +6,6 @@ using System.Text.Json;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
-using Amazon.DynamoDBv2.Model;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using OpenIddict.AmazonDynamoDB.DynamoDbTypeConverters;
@@ -48,9 +46,20 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
   }
 
 
-  public ValueTask<long> CountAsync<TResult>(Func<IQueryable<TToken>, IQueryable<TResult>> query, CancellationToken cancellationToken)
+  public async ValueTask<long> CountAsync<TResult>(Func<IQueryable<TToken>, IQueryable<TResult>> query, CancellationToken cancellationToken)
   {
-    throw new NotSupportedException();
+    if (query is null)
+    {
+      throw new ArgumentNullException(nameof(query));
+    }
+
+
+
+    var AllItems = await ListAllItemsAsync(cancellationToken);
+    var AllAsQ = AllItems.AsQueryable();
+    var FilteredItems = query(AllAsQ);
+    return FilteredItems?.Count()??0;
+
   }
 
   public async ValueTask CreateAsync(TToken token, CancellationToken cancellationToken)
@@ -94,12 +103,26 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
         },
       });
 
-      var tokens = await search.GetRemainingAsync(cancellationToken);
 
-      foreach (var token in tokens)
+
+
+
+      do
       {
-        yield return token;
-      }
+        var getNextBatch = search.GetNextSetAsync(cancellationToken);
+        var docList = await getNextBatch;
+        foreach (var item in docList)
+        {
+          yield return item;
+        }
+
+
+      } while (!search.IsDone);
+
+
+
+
+     
     }
   }
 
@@ -151,12 +174,21 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
         },
       });
 
-      var tokens = await search.GetRemainingAsync(cancellationToken);
 
-      foreach (var token in tokens)
+      do
       {
-        yield return token;
-      }
+       
+          var getNextBatch = search.GetNextSetAsync(cancellationToken);
+          var docList = await getNextBatch;
+          foreach (var token in docList)
+          {
+            yield return token;
+          }
+        
+      
+      } while (!search.IsDone);
+
+
     }
   }
 
@@ -239,12 +271,22 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
         },
       });
 
-      var tokens = await search.GetRemainingAsync(cancellationToken);
 
-      foreach (var token in tokens)
+
+
+      do
       {
-        yield return token;
-      }
+          var getNextBatch = search.GetNextSetAsync(cancellationToken);
+          var docList = await getNextBatch;
+        foreach (var item in docList)
+        {
+          yield return item;
+        }
+        
+       
+      } while (!search.IsDone);
+
+     
     }
   }
 
@@ -363,41 +405,158 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
     }
   }
 
-  public ConcurrentDictionary<int, string?> ListCursors { get; set; } = new ConcurrentDictionary<int, string?>();
-  public IAsyncEnumerable<TToken> ListAsync(int? count, int? offset, CancellationToken cancellationToken)
-  {
-    string? initalToken = default;
-    if (offset.HasValue)
+  /*
+    public ConcurrentDictionary<int, string?> ListCursors { get; set; } = new ConcurrentDictionary<int, string?>();
+    public IAsyncEnumerable<TToken> ListAsync(int? count, int? offset, CancellationToken cancellationToken)
     {
-      ListCursors.TryGetValue(offset.Value, out initalToken);
-
-      if (initalToken == default)
+      string? initalToken = default;
+      if (offset.HasValue)
       {
-        throw new NotSupportedException("Pagination support is very limited (see documentation)");
+        ListCursors.TryGetValue(offset.Value, out initalToken);
+
+        if (initalToken == default)
+        {
+          throw new NotSupportedException("Pagination support is very limited (see documentation)");
+        }
       }
+
+      return ExecuteAsync(cancellationToken);
+
+      async IAsyncEnumerable<TToken> ExecuteAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+      {
+        var (token, items) = await DynamoDbUtils.Paginate<TToken>(_client, count, initalToken, cancellationToken);
+
+        if (count.HasValue)
+        {
+          ListCursors.TryAdd(count.Value + (offset ?? 0), token);
+        }
+
+        foreach (var item in items)
+        {
+          yield return item;
+        }
+      }
+    }*/
+
+
+  public async IAsyncEnumerable<TToken> ListAsync(int? count, int? offset, CancellationToken cancellationToken)
+  {
+    var search = _context.FromQueryAsync<TToken>(new QueryOperationConfig
+    {
+      Select = SelectValues.AllAttributes,
+      KeyExpression = new Expression
+      {
+        ExpressionStatement = $"{nameof(OpenIddictDynamoDbToken.PartitionKey)} = :PK and begins_with({nameof(OpenIddictDynamoDbToken.SortKey)}, :prefix)",
+        ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> {
+                        {":PK", "TOKEN" },
+                        { ":prefix", "#TOKEN"},
+                   }
+      },
+    });
+
+    int actualCount = 0;
+    int itemIndex = 0;
+
+    bool StopWhileLoop = false;
+    do
+    {
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        if (cancellationToken.IsCancellationRequested)
+        {
+          StopWhileLoop = true;
+          break;
+        }
+
+        if (offset.HasValue)
+        {
+          if (itemIndex < offset)
+          {
+            itemIndex++;
+
+            continue;
+          }
+          else
+          {
+            actualCount++;
+            itemIndex++;
+
+            yield return item;
+          }
+        }
+        else
+        {
+          actualCount++;
+          itemIndex++;
+
+          yield return item;
+        }
+
+        // break the loop if we must, when we have already returned enough!
+        if (count.HasValue && actualCount >= count.Value)
+        {
+          StopWhileLoop = true;
+          break;
+        }
+      }
+    } while (!search.IsDone && !StopWhileLoop);
+
+  }
+
+
+  public async IAsyncEnumerable<TResult> ListAsync<TState, TResult>(Func<IQueryable<TToken>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
+  {
+    if (query is null)
+    {
+      throw new ArgumentNullException(nameof(query));
     }
 
-    return ExecuteAsync(cancellationToken);
 
-    async IAsyncEnumerable<TToken> ExecuteAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+
+    var AllItems = await ListAllItemsAsync(cancellationToken);
+    var AllAsQ = AllItems.AsQueryable();
+    var FilteredItems = query(AllAsQ, state);
+    foreach (var item in FilteredItems)
     {
-      var (token, items) = await DynamoDbUtils.Paginate<TToken>(_client, count, initalToken, cancellationToken);
-
-      if (count.HasValue)
-      {
-        ListCursors.TryAdd(count.Value + (offset ?? 0), token);
-      }
-
-      foreach (var item in items)
-      {
-        yield return item;
-      }
+      yield return item;
     }
   }
 
-  public IAsyncEnumerable<TResult> ListAsync<TState, TResult>(Func<IQueryable<TToken>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
+  public async Task<IEnumerable<TToken>> ListAllItemsAsync(CancellationToken cancellationToken)
   {
-    throw new NotSupportedException();
+
+    var search = _context.FromQueryAsync<TToken>(new QueryOperationConfig
+    {
+      Select = SelectValues.AllAttributes,
+      KeyExpression = new Expression
+      {
+        ExpressionStatement = $"{nameof(OpenIddictDynamoDbToken.PartitionKey)} = :PK and begins_with({nameof(OpenIddictDynamoDbToken.SortKey)}, :prefix)",
+        ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> {
+                        {":PK", "TOKEN" },
+                        { ":prefix", "#TOKEN"},
+                   }
+      },
+    });
+
+    List<TToken> allTokens = new List<TToken>();
+    do
+    {
+      if (cancellationToken.IsCancellationRequested)
+      {
+        break;
+      }
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        allTokens.Add(item);
+      }
+    } while (!search.IsDone);
+
+    return allTokens;
+
   }
 
   // Should not be needed to run, TTL should handle the pruning
@@ -431,7 +590,21 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
       });
 
 
-    var tokens = await search.GetRemainingAsync(cancellationToken);
+    var tokens = new List<TToken>();
+
+    do
+    {
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        tokens.Add(item);
+      }
+
+
+    } while (!search.IsDone);
+
+
 
 
     var remainingTokens = new List<TToken>();
@@ -699,22 +872,76 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
   {
 
     var updateCount = 0;
-    // Get all tokens which is older than threshold
-    var filter = new ScanFilter();
-    filter.AddCondition("AuthorizationId", ScanOperator.Equal, new List<AttributeValue>
-    {
-      new(identifier),
-    });
-    filter.AddCondition("Status", ScanOperator.NotEqual, new List<AttributeValue>
-    {
-      new(Statuses.Revoked),
-    });
 
-    var search = _context.FromScanAsync<TToken>(new ScanOperationConfig
+    /*
+        // Get all tokens which is older than threshold
+        var filter = new ScanFilter();
+        filter.AddCondition("AuthorizationId", ScanOperator.Equal, new List<AttributeValue>
+        {
+          new(identifier),
+        });
+        filter.AddCondition("Status", ScanOperator.NotEqual, new List<AttributeValue>
+        {
+          new(Statuses.Revoked),
+        });
+
+        var search = _context.FromScanAsync<TToken>(new ScanOperationConfig
+        {
+          Filter = filter,
+        });
+        var tokens = await search.GetRemainingAsync(cancellationToken);
+    */
+
+    var search = _context.FromQueryAsync<TToken>(
+     new QueryOperationConfig
+     {
+       Select = SelectValues.AllAttributes,
+       KeyExpression = new Amazon.DynamoDBv2.DocumentModel.Expression
+       {
+         ExpressionStatement = $"{nameof(OpenIddictDynamoDbToken.PartitionKey)} = :PK and begins_with({nameof(OpenIddictDynamoDbToken.SortKey)}, :prefix)",
+         ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> {
+                        {":PK", "TOKEN" },
+                        { ":prefix", "#TOKEN"},
+                   }
+       },
+       FilterExpression = new Expression
+       {
+         ExpressionStatement = "AuthorizationId = :AuthorizationId and not(#Status = :Status)",
+         ExpressionAttributeValues = new()
+       {
+          { ":AuthorizationId", identifier },
+          { ":Status", Statuses.Revoked },
+       },
+         ExpressionAttributeNames = new Dictionary<string, string>
+         {
+           { "#Status","Status" }
+
+         }
+       }
+
+     });
+
+
+    var tokens = new List<TToken>();
+
+
+    do
     {
-      Filter = filter,
-    });
-    var tokens = await search.GetRemainingAsync(cancellationToken);
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        tokens.Add( item);
+      }
+
+
+    } while (!search.IsDone);
+
+
+
+
+
+
 
     if (tokens == null)
     {

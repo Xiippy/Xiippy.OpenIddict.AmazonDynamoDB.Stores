@@ -61,8 +61,9 @@ public class OpenIddictDynamoDbTokenStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
-      await tokenStore.CountAsync<int>(default!, CancellationToken.None));
+    //  var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>await tokenStore.CountAsync<int>(default!, CancellationToken.None));
+    var x = await tokenStore.CountAsync<int>((tokens) => { return tokens.Select(x => 10).AsQueryable(); }, CancellationToken.None);
+    Assert.True(x != 0);
   }
 
   [Fact]
@@ -74,8 +75,13 @@ public class OpenIddictDynamoDbTokenStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    Assert.Throws<NotSupportedException>(() =>
-      tokenStore.ListAsync<int, int>(default!, default, CancellationToken.None));
+    var x = tokenStore.ListAsync<string, OpenIddictDynamoDbToken>((x, y) => { return x.Where(z => z.ApplicationId != y).AsQueryable(); }, "Abcde", CancellationToken.None);
+
+    await foreach (var item in x)
+    {
+      var z = item;
+      Assert.True(z != null);
+    }
   }
 
   [Fact]
@@ -133,14 +139,14 @@ public class OpenIddictDynamoDbTokenStoreTests
     var token = new OpenIddictDynamoDbToken
     {
       Subject = Guid.NewGuid().ToString(),
-      Id= Guid.NewGuid().ToString(),
+      Id = Guid.NewGuid().ToString(),
     };
 
     // Act
     await tokenStore.CreateAsync(token, CancellationToken.None);
 
     // Assert
-    var databaseToken = await context.LoadAsync<OpenIddictDynamoDbToken>(  token.PartitionKey, token.SortKey);
+    var databaseToken = await context.LoadAsync<OpenIddictDynamoDbToken>(token.PartitionKey, token.SortKey);
     Assert.NotNull(databaseToken);
     Assert.Equal(token.Subject, databaseToken.Subject);
   }
@@ -784,8 +790,17 @@ public class OpenIddictDynamoDbTokenStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    Assert.Throws<NotSupportedException>(() =>
-      tokenStore.ListAsync(5, 5, CancellationToken.None));
+    //Assert.Throws<NotSupportedException>(() => tokenStore.ListAsync(5, 5, CancellationToken.None));
+
+
+    var x = tokenStore.ListAsync<string, OpenIddictDynamoDbToken>((x, y) => { return x.Where(z => z.ApplicationId != y).AsQueryable(); }, "Abcde", CancellationToken.None);
+
+    await foreach (var item in x)
+    {
+      var z = item;
+      Assert.True(z != null);
+    }
+
   }
 
   [Fact]
@@ -904,7 +919,7 @@ public class OpenIddictDynamoDbTokenStoreTests
     var tokenStore = new OpenIddictDynamoDbTokenStore<OpenIddictDynamoDbToken>(options);
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
     var token = new OpenIddictDynamoDbToken();
-    
+
 
     await tokenStore.CreateAsync(token, CancellationToken.None);
 
@@ -1842,7 +1857,7 @@ public class OpenIddictDynamoDbTokenStoreTests
       }, CancellationToken.None);
     }
 
-    
+
 
     // Act
     var beforeCount = await tokenStore.CountAsync(CancellationToken.None);
@@ -1932,14 +1947,14 @@ public class OpenIddictDynamoDbTokenStoreTests
 
 
     // Assert
-    
+
 
     var AllTokens = tokenStore.ListAsync(null, null, CancellationToken.None);
 
 
     await foreach (var token in AllTokens)
     {
-      if (OpenIddictDynamoDbTokens.Any(x=>x.AuthorizationId==token.AuthorizationId))
+      if (OpenIddictDynamoDbTokens.Any(x => x.AuthorizationId == token.AuthorizationId))
       {
         Assert.Equal(Statuses.Revoked, token.Status);
       }
