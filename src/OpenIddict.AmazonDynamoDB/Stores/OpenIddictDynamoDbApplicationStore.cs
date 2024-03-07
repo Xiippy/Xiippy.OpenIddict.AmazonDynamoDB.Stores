@@ -49,9 +49,19 @@ public class OpenIddictDynamoDbApplicationStore<TApplication> : IOpenIddictAppli
     return count?.Count ?? 0;
   }
 
-  public ValueTask<long> CountAsync<TResult>(Func<IQueryable<TApplication>, IQueryable<TResult>> query, CancellationToken cancellationToken)
+  public async ValueTask<long> CountAsync<TResult>(Func<IQueryable<TApplication>, IQueryable<TResult>> query, CancellationToken cancellationToken)
   {
-    throw new NotSupportedException();
+    if (query is null)
+    {
+      throw new ArgumentNullException(nameof(query));
+    }
+
+
+
+    var AllItems = await ListAllItemsAsync(cancellationToken);
+    var AllAsQ = AllItems.AsQueryable();
+    var FilteredItems = query(AllAsQ);
+    return FilteredItems?.Count() ?? 0;
   }
 
   public async ValueTask CreateAsync(TApplication application, CancellationToken cancellationToken)
@@ -214,9 +224,19 @@ public class OpenIddictDynamoDbApplicationStore<TApplication> : IOpenIddictAppli
     }
   }
 
-  public ValueTask<TResult?> GetAsync<TState, TResult>(Func<IQueryable<TApplication>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
+  public async ValueTask<TResult?> GetAsync<TState, TResult>(Func<IQueryable<TApplication>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
   {
-    throw new NotSupportedException();
+    if (query is null)
+    {
+      throw new ArgumentNullException(nameof(query));
+    }
+
+
+
+    var AllItems = await ListAllItemsAsync(cancellationToken);
+    var AllAsQ = AllItems.AsQueryable();
+    var FilteredItems = query(AllAsQ,state);
+    return FilteredItems.FirstOrDefault();
   }
 
   public ValueTask<string?> GetClientIdAsync(TApplication application, CancellationToken cancellationToken)
@@ -357,7 +377,7 @@ public class OpenIddictDynamoDbApplicationStore<TApplication> : IOpenIddictAppli
   }
 
   public ConcurrentDictionary<int, string?> ListCursors { get; set; } = new ConcurrentDictionary<int, string?>();
-  public IAsyncEnumerable<TApplication> ListAsync(int? count, int? offset, CancellationToken cancellationToken)
+  /*public IAsyncEnumerable<TApplication> ListAsync(int? count, int? offset, CancellationToken cancellationToken)
   {
     string? initalToken = default;
     if (offset.HasValue)
@@ -387,11 +407,140 @@ public class OpenIddictDynamoDbApplicationStore<TApplication> : IOpenIddictAppli
       }
     }
   }
+*/
 
-  public IAsyncEnumerable<TResult> ListAsync<TState, TResult>(Func<IQueryable<TApplication>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
+
+  public async IAsyncEnumerable<TApplication> ListAsync(int? count, int? offset, CancellationToken cancellationToken)
   {
-    throw new NotSupportedException();
+  
+
+
+
+    var search = _context.FromQueryAsync<TApplication>(new QueryOperationConfig
+    {
+      Select = SelectValues.AllAttributes,
+      KeyExpression = new Expression
+      {
+        ExpressionStatement = $"{nameof(OpenIddictDynamoDbApplication.PartitionKey)} = :PK and begins_with({nameof(OpenIddictDynamoDbApplication.SortKey)}, :prefix)",
+        ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> {
+                        {":PK", OpenIddictDynamoDbApplication.APPLICATION_PartitionKey },
+                        { ":prefix", OpenIddictDynamoDbApplication.APPLICATION_SortKeyPrefix},
+                   }
+      },
+    });
+
+    int actualCount = 0;
+    int itemIndex = 0;
+
+    bool StopWhileLoop = false;
+    do
+    {
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        if (cancellationToken.IsCancellationRequested)
+        {
+          StopWhileLoop = true;
+          break;
+        }
+
+        if (offset.HasValue)
+        {
+          if (itemIndex < offset)
+          {
+            itemIndex++;
+
+            continue;
+          }
+          else
+          {
+            actualCount++;
+            itemIndex++;
+
+            yield return item;
+          }
+        }
+        else
+        {
+          actualCount++;
+          itemIndex++;
+
+          yield return item;
+        }
+
+        // break the loop if we must, when we have already returned enough!
+        if (count.HasValue && actualCount >= count.Value)
+        {
+          StopWhileLoop = true;
+          break;
+        }
+      }
+    } while (!search.IsDone && !StopWhileLoop);
+
+
+
+
   }
+
+  public async IAsyncEnumerable<TResult> ListAsync<TState, TResult>(Func<IQueryable<TApplication>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
+  {
+
+
+    if (query is null)
+    {
+      throw new ArgumentNullException(nameof(query));
+    }
+
+
+
+    var AllItems = await ListAllItemsAsync(cancellationToken);
+    var AllAsQ = AllItems.AsQueryable();
+    var FilteredItems = query(AllAsQ, state);
+    foreach (var item in FilteredItems)
+    {
+      yield return item;
+    }
+
+
+  }
+
+
+  public async Task<IEnumerable<TApplication>> ListAllItemsAsync(CancellationToken cancellationToken)
+  {
+
+    var search = _context.FromQueryAsync<TApplication>(new QueryOperationConfig
+    {
+      Select = SelectValues.AllAttributes,
+      KeyExpression = new Expression
+      {
+        ExpressionStatement = $"{nameof(OpenIddictDynamoDbApplication.PartitionKey)} = :PK and begins_with({nameof(OpenIddictDynamoDbApplication.SortKey)}, :prefix)",
+        ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> {
+                        {":PK", OpenIddictDynamoDbApplication.APPLICATION_PartitionKey },
+                        { ":prefix", OpenIddictDynamoDbApplication.APPLICATION_SortKeyPrefix},
+                   }
+      },
+    });
+
+    List<TApplication> allTokens = new List<TApplication>();
+    do
+    {
+      if (cancellationToken.IsCancellationRequested)
+      {
+        break;
+      }
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        allTokens.Add(item);
+      }
+    } while (!search.IsDone);
+
+    return allTokens;
+
+  }
+
 
   public ValueTask SetClientIdAsync(TApplication application, string? identifier, CancellationToken cancellationToken)
   {
@@ -578,12 +727,28 @@ public class OpenIddictDynamoDbApplicationStore<TApplication> : IOpenIddictAppli
         ExpressionStatement = "PartitionKey = :partitionKey and begins_with(SortKey, :sortKey)",
         ExpressionAttributeValues = new()
         {
-          { ":partitionKey", application.PartitionKey },
+          { ":partitionKey", application.SortKey },
           { ":sortKey", "REDIRECT#" },
         }
       },
     });
-    var applicationRedirects = await search.GetRemainingAsync(cancellationToken);
+
+    var applicationRedirects = new List<OpenIddictDynamoDbApplicationRedirect>();
+    do
+    {
+      if (cancellationToken.IsCancellationRequested)
+      {
+        break;
+      }
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        applicationRedirects.Add(item);
+      }
+    } while (!search.IsDone);
+
+
 
     // Remove previously stored redirects
     if (applicationRedirects.Any())

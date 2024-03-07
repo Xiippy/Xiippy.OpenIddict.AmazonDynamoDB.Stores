@@ -297,9 +297,19 @@ public class OpenIddictDynamoDbTokenStore<TToken> : IOpenIddictTokenStore<TToken
     return new(token.ApplicationId);
   }
 
-  public ValueTask<TResult?> GetAsync<TState, TResult>(Func<IQueryable<TToken>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
+  public async ValueTask<TResult?> GetAsync<TState, TResult>(Func<IQueryable<TToken>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
   {
-    throw new NotSupportedException();
+    if (query is null)
+    {
+      throw new ArgumentNullException(nameof(query));
+    }
+
+
+
+    var AllItems = await ListAllItemsAsync(cancellationToken);
+    var AllAsQ = AllItems.AsQueryable();
+    var FilteredItems = query(AllAsQ, state);
+    return FilteredItems.FirstOrDefault();
   }
 
   public ValueTask<string?> GetAuthorizationIdAsync(TToken token, CancellationToken cancellationToken)

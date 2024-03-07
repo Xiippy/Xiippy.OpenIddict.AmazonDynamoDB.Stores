@@ -11,6 +11,7 @@ using Amazon.DynamoDBv2.DocumentModel;
 using Amazon.DynamoDBv2.Model;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace OpenIddict.AmazonDynamoDB;
 
@@ -48,9 +49,19 @@ public class OpenIddictDynamoDbScopeStore<TScope> : IOpenIddictScopeStore<TScope
     return count?.Count ?? 0;
   }
 
-  public ValueTask<long> CountAsync<TResult>(Func<IQueryable<TScope>, IQueryable<TResult>> query, CancellationToken cancellationToken)
+  public async ValueTask<long> CountAsync<TResult>(Func<IQueryable<TScope>, IQueryable<TResult>> query, CancellationToken cancellationToken)
   {
-    throw new NotSupportedException();
+    if (query is null)
+    {
+      throw new ArgumentNullException(nameof(query));
+    }
+
+
+
+    var AllItems = await ListAllItemsAsync(cancellationToken);
+    var AllAsQ = AllItems.AsQueryable();
+    var FilteredItems = query(AllAsQ);
+    return FilteredItems?.Count() ?? 0;
   }
 
   public async ValueTask CreateAsync(TScope scope, CancellationToken cancellationToken)
@@ -196,9 +207,19 @@ public class OpenIddictDynamoDbScopeStore<TScope> : IOpenIddictScopeStore<TScope
     return batch.Results;
   }
 
-  public ValueTask<TResult?> GetAsync<TState, TResult>(Func<IQueryable<TScope>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
+  public async ValueTask<TResult?> GetAsync<TState, TResult>(Func<IQueryable<TScope>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
   {
-    throw new NotSupportedException();
+    if (query is null)
+    {
+      throw new ArgumentNullException(nameof(query));
+    }
+
+
+
+    var AllItems = await ListAllItemsAsync(cancellationToken);
+    var AllAsQ = AllItems.AsQueryable();
+    var FilteredItems = query(AllAsQ, state);
+    return FilteredItems.FirstOrDefault();
   }
 
   public ValueTask<string?> GetDescriptionAsync(TScope scope, CancellationToken cancellationToken)
@@ -303,7 +324,7 @@ public class OpenIddictDynamoDbScopeStore<TScope> : IOpenIddictScopeStore<TScope
   }
 
   public ConcurrentDictionary<int, string?> ListCursors { get; set; } = new ConcurrentDictionary<int, string?>();
-  public IAsyncEnumerable<TScope> ListAsync(int? count, int? offset, CancellationToken cancellationToken)
+  /*public IAsyncEnumerable<TScope> ListAsync(int? count, int? offset, CancellationToken cancellationToken)
   {
     string? initalToken = default;
     if (offset.HasValue)
@@ -332,15 +353,139 @@ public class OpenIddictDynamoDbScopeStore<TScope> : IOpenIddictScopeStore<TScope
         yield return item;
       }
     }
+  }*/
+
+
+  public async IAsyncEnumerable<TScope> ListAsync(int? count, int? offset, CancellationToken cancellationToken)
+  {
+
+    var search = _context.FromQueryAsync<TScope>(new QueryOperationConfig
+    {
+      Select = SelectValues.AllAttributes,
+      KeyExpression = new Expression
+      {
+        ExpressionStatement = $"{nameof(OpenIddictDynamoDbScope.PartitionKey)} = :PK and begins_with({nameof(OpenIddictDynamoDbScope.SortKey)}, :prefix)",
+        ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> {
+                        {":PK", OpenIddictDynamoDbScope.SCOPE_PartitionKey },
+                        { ":prefix", OpenIddictDynamoDbScope.SCOPE_SortKeyPrefix},
+                   }
+      },
+    });
+
+    int actualCount = 0;
+    int itemIndex = 0;
+
+    bool StopWhileLoop = false;
+    do
+    {
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        if (cancellationToken.IsCancellationRequested)
+        {
+          StopWhileLoop = true;
+          break;
+        }
+
+        if (offset.HasValue)
+        {
+          if (itemIndex < offset)
+          {
+            itemIndex++;
+
+            continue;
+          }
+          else
+          {
+            actualCount++;
+            itemIndex++;
+
+            yield return item;
+          }
+        }
+        else
+        {
+          actualCount++;
+          itemIndex++;
+
+          yield return item;
+        }
+
+        // break the loop if we must, when we have already returned enough!
+        if (count.HasValue && actualCount >= count.Value)
+        {
+          StopWhileLoop = true;
+          break;
+        }
+      }
+    } while (!search.IsDone && !StopWhileLoop);
+
+
   }
 
-  public IAsyncEnumerable<TResult> ListAsync<TState, TResult>(
+
+  public async IAsyncEnumerable<TResult> ListAsync<TState, TResult>(
     Func<IQueryable<TScope>, TState, IQueryable<TResult>> query,
     TState state,
     CancellationToken cancellationToken)
   {
-    throw new NotSupportedException();
+
+    if (query is null)
+    {
+      throw new ArgumentNullException(nameof(query));
+    }
+
+
+
+    var AllItems = await ListAllItemsAsync(cancellationToken);
+    var AllAsQ = AllItems.AsQueryable();
+    var FilteredItems = query(AllAsQ, state);
+    foreach (var item in FilteredItems)
+    {
+      yield return item;
+    }
+
   }
+
+
+
+
+  public async Task<IEnumerable<TScope>> ListAllItemsAsync(CancellationToken cancellationToken)
+  {
+
+    var search = _context.FromQueryAsync<TScope>(new QueryOperationConfig
+    {
+      Select = SelectValues.AllAttributes,
+      KeyExpression = new Expression
+      {
+        ExpressionStatement = $"{nameof(OpenIddictDynamoDbScope.PartitionKey)} = :PK and begins_with({nameof(OpenIddictDynamoDbScope.SortKey)}, :prefix)",
+        ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> {
+                        {":PK", OpenIddictDynamoDbScope.SCOPE_PartitionKey },
+                        { ":prefix", OpenIddictDynamoDbScope.SCOPE_SortKeyPrefix},
+                   }
+      },
+    });
+
+    List<TScope> allTokens = new List<TScope>();
+    do
+    {
+      if (cancellationToken.IsCancellationRequested)
+      {
+        break;
+      }
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        allTokens.Add(item);
+      }
+    } while (!search.IsDone);
+
+    return allTokens;
+
+  }
+
 
   public ValueTask SetDescriptionAsync(TScope scope, string? description, CancellationToken cancellationToken)
   {
@@ -486,7 +631,25 @@ public class OpenIddictDynamoDbScopeStore<TScope> : IOpenIddictScopeStore<TScope
       },
     });
 
-    var lookups = await search.GetRemainingAsync(cancellationToken);
+
+    var lookups = new List<OpenIddictDynamoDbScopeLookup>();
+    do
+    {
+      if (cancellationToken.IsCancellationRequested)
+      {
+        break;
+      }
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        lookups.Add(item);
+      }
+    } while (!search.IsDone);
+
+
+
+
 
     // Remove previously stored scope lookups
     if (lookups?.Any() == true)

@@ -5,16 +5,21 @@ namespace OpenIddict.AmazonDynamoDB;
 [DynamoDBTable(Constants.DefaultTableName)]
 public class OpenIddictDynamoDbApplication
 {
+
+  public const string APPLICATION_SortKeyPrefix = "APPLICATION#";
+  public const string APPLICATION_PartitionKey = "APPLICATION";
+
+
   [DynamoDBHashKey]
   public string PartitionKey
   {
-    get => $"APPLICATION#{Id}";
+    get => APPLICATION_PartitionKey;
     private set { }
   }
   [DynamoDBRangeKey]
   public string? SortKey
   {
-    get => $"#USER#{Id}";
+    get => $"{APPLICATION_SortKeyPrefix}{Id}";
     set { }
   }
   public virtual string Id { get; set; } = Guid.NewGuid().ToString();

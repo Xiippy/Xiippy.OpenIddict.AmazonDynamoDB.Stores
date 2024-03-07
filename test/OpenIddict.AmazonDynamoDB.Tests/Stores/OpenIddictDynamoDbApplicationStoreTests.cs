@@ -77,7 +77,7 @@ public class OpenIddictDynamoDbApplicationStoreTests
   }
 
   [Fact]
-  public async Task Should_ThrowNotSupported_When_TryingToCountBasedOnLinq()
+  public async Task ShouldNOT_ThrowNotSupported_When_TryingToCountBasedOnLinq()
   {
     // Arrange
     var options = TestUtils.GetOptions(new() { Database = _client });
@@ -85,8 +85,13 @@ public class OpenIddictDynamoDbApplicationStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    await Assert.ThrowsAsync<NotSupportedException>(async () =>
-      await applicationStore.CountAsync(x => x.Where(y => y.DisplayName == "Test"), CancellationToken.None));
+    var x1=  await applicationStore.CountAsync(x => x.Where(y => y.DisplayName != "Test"), CancellationToken.None);
+    Assert.True(x1 != 0);
+
+    var x = await applicationStore.CountAsync<int>((tokens) => { return tokens.Select(x => 10).AsQueryable(); }, CancellationToken.None);
+    Assert.True(x != 0);
+
+
   }
 
   [Fact]
@@ -564,7 +569,7 @@ public class OpenIddictDynamoDbApplicationStoreTests
   }
 
   [Fact]
-  public async Task Should_ThrowNotSupported_When_TryingToGetBasedOnLinq()
+  public async Task ShouldNOT_ThrowNotSupported_When_TryingToGetBasedOnLinq()
   {
     // Arrange
     var options = TestUtils.GetOptions(new() { Database = _client });
@@ -572,8 +577,9 @@ public class OpenIddictDynamoDbApplicationStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    await Assert.ThrowsAsync<NotSupportedException>(async () =>
-      await applicationStore.GetAsync<int, int>(default!, default, CancellationToken.None));
+
+    var x = await applicationStore.GetAsync<string, OpenIddictDynamoDbApplication>((x, y) => { return x.Where(z => z.Id != y).AsQueryable(); }, "Abcde", CancellationToken.None);
+    Assert.NotNull(x);
   }
 
   [Fact]
@@ -1691,7 +1697,7 @@ public class OpenIddictDynamoDbApplicationStoreTests
   }
 
   [Fact]
-  public async Task Should_ThrowNotSupported_When_TryingToListBasedOnLinq()
+  public async Task ShouldNot_ThrowNotSupported_When_TryingToListBasedOnLinq()
   {
     // Arrange
     var options = TestUtils.GetOptions(new() { Database = _client });
@@ -1699,8 +1705,18 @@ public class OpenIddictDynamoDbApplicationStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    Assert.Throws<NotSupportedException>(() =>
-      applicationStore.ListAsync<int, int>(default!, default, CancellationToken.None));
+
+
+
+    var x = applicationStore.ListAsync<string, OpenIddictDynamoDbApplication>((x, y) => { return x.Where(z => z.Id != y).AsQueryable(); }, "Abcde", CancellationToken.None);
+
+    await foreach (var item in x)
+    {
+      var z = item;
+      Assert.True(z != null);
+    }
+
+
   }
 
   [Fact]
@@ -1808,7 +1824,7 @@ public class OpenIddictDynamoDbApplicationStoreTests
   }
 
   [Fact]
-  public async Task Should_ThrowNotSupported_When_TryingToFetchWithOffsetWithoutFirstFetchingPreviousPages()
+  public async Task ShouldNot_ThrowNotSupported_When_TryingToFetchWithOffsetWithoutFirstFetchingPreviousPages()
   {
     // Arrange
     var options = TestUtils.GetOptions(new() { Database = _client });
@@ -1816,8 +1832,13 @@ public class OpenIddictDynamoDbApplicationStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    Assert.Throws<NotSupportedException>(() =>
-      applicationStore.ListAsync(5, 5, CancellationToken.None));
+
+    var x = applicationStore.ListAsync(5, 5, CancellationToken.None);
+    await foreach (var item in x)
+    {
+      var z = item;
+      Assert.True(z != null);
+    }
   }
 
   /// <summary>
@@ -1835,18 +1856,18 @@ public class OpenIddictDynamoDbApplicationStoreTests
     var application = new OpenIddictDynamoDbApplication
     {
       ClientId = Guid.NewGuid().ToString(),
-      ApplicationType= Guid.NewGuid().ToString(),
-      
+      ApplicationType = Guid.NewGuid().ToString(),
+
 
     };
 
-    
+
 
     await applicationStore.CreateAsync(application, CancellationToken.None);
 
 
 
-  
+
     var databaseApplication = await context.LoadAsync<OpenIddictDynamoDbApplication>(application.PartitionKey, application.SortKey);
     Assert.NotNull(databaseApplication);
     Assert.Equal(application.ApplicationType, databaseApplication.ApplicationType);
@@ -1863,9 +1884,9 @@ public class OpenIddictDynamoDbApplicationStoreTests
 
 
     var settings = ImmutableDictionary.CreateBuilder<string, string>();
-    settings.Add("a","a");
+    settings.Add("a", "a");
     settings.Add("b", "b");
-    var settingsImmutable=settings.ToImmutable();
+    var settingsImmutable = settings.ToImmutable();
     await applicationStore.SetSettingsAsync(application, settingsImmutable, default(CancellationToken));
 
     Assert.Equal(application.Settings, settingsImmutable);

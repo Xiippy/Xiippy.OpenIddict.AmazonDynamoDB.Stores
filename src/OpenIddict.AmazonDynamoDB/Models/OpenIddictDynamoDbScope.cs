@@ -5,16 +5,21 @@ namespace OpenIddict.AmazonDynamoDB;
 [DynamoDBTable(Constants.DefaultTableName)]
 public class OpenIddictDynamoDbScope
 {
+
+  public const string SCOPE_SortKeyPrefix = "SCOPE#";
+  public const string SCOPE_PartitionKey = "SCOPE";
+
+
   [DynamoDBHashKey]
   public string PartitionKey
   {
-    get => $"SCOPE#{Id}";
+    get => SCOPE_PartitionKey;
     private set { }
   }
   [DynamoDBRangeKey]
   public string? SortKey
   {
-    get => $"#SCOPE#{Id}";
+    get => $"{SCOPE_SortKeyPrefix}{Id}";
     set { }
   }
   public virtual string Id { get; set; } = Guid.NewGuid().ToString();

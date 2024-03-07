@@ -53,7 +53,7 @@ public class OpenIddictDynamoDbScopeStoreTests
   }
 
   [Fact]
-  public async Task Should_ThrowNotSupported_When_TryingToCountBasedOnLinq()
+  public async Task ShouldNOT_ThrowNotSupported_When_TryingToCountBasedOnLinq()
   {
     // Arrange
     var options = TestUtils.GetOptions(new() { Database = _client });
@@ -61,12 +61,17 @@ public class OpenIddictDynamoDbScopeStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
-      await scopeStore.CountAsync<int>(default!, CancellationToken.None));
+
+    var count = await scopeStore.CountAsync<int>((scopes) => { return scopes.Select(x => 10).AsQueryable(); }, CancellationToken.None);
+    Assert.True(count != 0);
+
+
+
+
   }
 
   [Fact]
-  public async Task Should_ThrowNotSupported_When_TryingToListBasedOnLinq()
+  public async Task ShouldNOT_ThrowNotSupported_When_TryingToListBasedOnLinq()
   {
     // Arrange
     var options = TestUtils.GetOptions(new() { Database = _client });
@@ -74,12 +79,20 @@ public class OpenIddictDynamoDbScopeStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    Assert.Throws<NotSupportedException>(() =>
-      scopeStore.ListAsync<int, int>(default!, default, CancellationToken.None));
+
+
+
+    var x = scopeStore.ListAsync<string, OpenIddictDynamoDbScope>((x, y) => { return x.Where(z => z.Id != y).AsQueryable(); }, "Abcde", CancellationToken.None);
+
+    await foreach (var item in x)
+    {
+      var z = item;
+      Assert.True(z != null);
+    }
   }
 
   [Fact]
-  public async Task Should_ThrowNotSupported_When_TryingToGetBasedOnLinq()
+  public async Task ShouldNOT_ThrowNotSupported_When_TryingToGetBasedOnLinq()
   {
     // Arrange
     var options = TestUtils.GetOptions(new() { Database = _client });
@@ -87,8 +100,11 @@ public class OpenIddictDynamoDbScopeStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
-      await scopeStore.GetAsync<int, int>(default!, default!, CancellationToken.None));
+
+
+    var x = scopeStore.GetAsync<string, OpenIddictDynamoDbScope>((x, y) => { return x.Where(z => z.Id != y).AsQueryable(); }, "Abcde", CancellationToken.None);
+    Assert.NotNull(x);
+
   }
 
   [Fact]
@@ -869,7 +885,7 @@ public class OpenIddictDynamoDbScopeStoreTests
   }
 
   [Fact]
-  public async Task Should_ThrowNotSupported_When_TryingToFetchWithOffsetWithoutFirstFetchingPreviousPages()
+  public async Task ShouldNot_ThrowNotSupported_When_TryingToFetchWithOffsetWithoutFirstFetchingPreviousPages()
   {
     // Arrange
     var options = TestUtils.GetOptions(new() { Database = _client });
@@ -877,8 +893,12 @@ public class OpenIddictDynamoDbScopeStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    Assert.Throws<NotSupportedException>(() =>
-      scopeStore.ListAsync(5, 5, CancellationToken.None));
+    var items = scopeStore.ListAsync(5, 5, CancellationToken.None);
+    await foreach (var item in items)
+    {
+      var z = item;
+      Assert.True(z != null);
+    }
   }
 
   [Fact]

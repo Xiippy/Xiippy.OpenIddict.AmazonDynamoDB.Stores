@@ -79,8 +79,7 @@ public class OpenIddictDynamoDbAuthorizationStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
-      await authorizationStore.CountAsync<int>(default!, CancellationToken.None));
+    var exception = await Assert.ThrowsAsync<NotSupportedException>(async () => await authorizationStore.CountAsync<int>(default!, CancellationToken.None));
   }
 
   [Fact]
@@ -166,8 +165,14 @@ public class OpenIddictDynamoDbAuthorizationStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    Assert.Throws<NotSupportedException>(() =>
-      authorizationStore.ListAsync<int, int>(default!, default, CancellationToken.None));
+
+    var x = authorizationStore.ListAsync<string, OpenIddictDynamoDbAuthorization>((x, y) => { return x.Where(z => z.ApplicationId != y).AsQueryable(); }, "Abcde", CancellationToken.None);
+
+    await foreach (var item in x)
+    {
+      var z = item;
+      Assert.True(z != null);
+    }
   }
 
   [Fact]
@@ -275,7 +280,7 @@ public class OpenIddictDynamoDbAuthorizationStoreTests
   }
 
   [Fact]
-  public async Task Should_ThrowNotSupported_When_TryingToFetchWithOffsetWithoutFirstFetchingPreviousPages()
+  public async Task ShouldNOT_ThrowNotSupported_When_TryingToFetchWithOffsetWithoutFirstFetchingPreviousPages()
   {
     // Arrange
     var options = TestUtils.GetOptions(new() { Database = _client });
@@ -283,8 +288,13 @@ public class OpenIddictDynamoDbAuthorizationStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    Assert.Throws<NotSupportedException>(() =>
-      authorizationStore.ListAsync(5, 5, CancellationToken.None));
+
+    var Items = authorizationStore.ListAsync(5, 5, CancellationToken.None);
+    await foreach (var item in Items)
+    {
+      var z = item;
+      Assert.True(z != null);
+    }
   }
 
   [Fact]
@@ -930,7 +940,7 @@ public class OpenIddictDynamoDbAuthorizationStoreTests
   }
 
   [Fact]
-  public async Task Should_ThrowNotSupported_When_TryingToGetBasedOnLinq()
+  public async Task ShouldNOT_ThrowNotSupported_When_TryingToGetBasedOnLinq()
   {
     // Arrange
     var options = TestUtils.GetOptions(new() { Database = _client });
@@ -938,8 +948,11 @@ public class OpenIddictDynamoDbAuthorizationStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
-      await authorizationStore.GetAsync<int, int>(default!, default!, CancellationToken.None));
+
+
+    var x = await authorizationStore.GetAsync<string, OpenIddictDynamoDbAuthorization>((x, y) => { return x.Where(z => z.Id != y).AsQueryable(); }, "Abcde", CancellationToken.None);
+    Assert.NotNull(x);
+
   }
 
   [Fact]

@@ -265,9 +265,55 @@ public class OpenIddictDynamoDbAuthorizationStore<TAuthorization> : IOpenIddictA
     return new(authorization.ApplicationId);
   }
 
-  public ValueTask<TResult?> GetAsync<TState, TResult>(Func<IQueryable<TAuthorization>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
+  public async ValueTask<TResult?> GetAsync<TState, TResult>(Func<IQueryable<TAuthorization>, TState, IQueryable<TResult>> query, TState state, CancellationToken cancellationToken)
   {
-    throw new NotSupportedException();
+    if (query is null)
+    {
+      throw new ArgumentNullException(nameof(query));
+    }
+
+
+
+    var AllItems = await ListAllItemsAsync(cancellationToken);
+    var AllAsQ = AllItems.AsQueryable();
+    var FilteredItems = query(AllAsQ, state);
+    return FilteredItems.FirstOrDefault();
+  }
+
+
+  public async Task<IEnumerable<TAuthorization>> ListAllItemsAsync(CancellationToken cancellationToken)
+  {
+
+    var search = _context.FromQueryAsync<TAuthorization>(new QueryOperationConfig
+    {
+      Select = SelectValues.AllAttributes,
+      KeyExpression = new Expression
+      {
+        ExpressionStatement = $"{nameof(OpenIddictDynamoDbAuthorization.PartitionKey)} = :PK and begins_with({nameof(OpenIddictDynamoDbAuthorization.SortKey)}, :prefix)",
+        ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> {
+                        {":PK", OpenIddictDynamoDbAuthorization.Authorization_PartitionKey },
+                        { ":prefix", OpenIddictDynamoDbAuthorization.Authorization_SortKeyPrefix},
+                   }
+      },
+    });
+
+    List<TAuthorization> allTokens = new List<TAuthorization>();
+    do
+    {
+      if (cancellationToken.IsCancellationRequested)
+      {
+        break;
+      }
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        allTokens.Add(item);
+      }
+    } while (!search.IsDone);
+
+    return allTokens;
+
   }
 
   public ValueTask<DateTimeOffset?> GetCreationDateAsync(TAuthorization authorization, CancellationToken cancellationToken)
@@ -358,7 +404,7 @@ public class OpenIddictDynamoDbAuthorizationStore<TAuthorization> : IOpenIddictA
 
   public ConcurrentDictionary<int, string?> ListCursors { get; set; }
     = new ConcurrentDictionary<int, string?>();
-  public IAsyncEnumerable<TAuthorization> ListAsync(
+  /*public IAsyncEnumerable<TAuthorization> ListAsync(
     int? count, int? offset, CancellationToken cancellationToken)
   {
     string? initalToken = default;
@@ -388,14 +434,94 @@ public class OpenIddictDynamoDbAuthorizationStore<TAuthorization> : IOpenIddictA
         yield return item;
       }
     }
+  }*/
+
+  public async IAsyncEnumerable<TAuthorization> ListAsync(
+    int? count, int? offset, CancellationToken cancellationToken)
+  {
+    var search = _context.FromQueryAsync<TAuthorization>(new QueryOperationConfig
+    {
+      Select = SelectValues.AllAttributes,
+      KeyExpression = new Expression
+      {
+        ExpressionStatement = $"{nameof(OpenIddictDynamoDbAuthorization.PartitionKey)} = :PK and begins_with({nameof(OpenIddictDynamoDbAuthorization.SortKey)}, :prefix)",
+        ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> {
+                        {":PK", OpenIddictDynamoDbAuthorization.Authorization_PartitionKey },
+                        { ":prefix", OpenIddictDynamoDbAuthorization.Authorization_SortKeyPrefix},
+                   }
+      },
+    });
+
+    int actualCount = 0;
+    int itemIndex = 0;
+
+    bool StopWhileLoop = false;
+    do
+    {
+      var getNextBatch = search.GetNextSetAsync(cancellationToken);
+      var docList = await getNextBatch;
+      foreach (var item in docList)
+      {
+        if (cancellationToken.IsCancellationRequested)
+        {
+          StopWhileLoop = true;
+          break;
+        }
+
+        if (offset.HasValue)
+        {
+          if (itemIndex < offset)
+          {
+            itemIndex++;
+
+            continue;
+          }
+          else
+          {
+            actualCount++;
+            itemIndex++;
+
+            yield return item;
+          }
+        }
+        else
+        {
+          actualCount++;
+          itemIndex++;
+
+          yield return item;
+        }
+
+        // break the loop if we must, when we have already returned enough!
+        if (count.HasValue && actualCount >= count.Value)
+        {
+          StopWhileLoop = true;
+          break;
+        }
+      }
+    } while (!search.IsDone && !StopWhileLoop);
   }
 
-  public IAsyncEnumerable<TResult> ListAsync<TState, TResult>(
+
+  public async IAsyncEnumerable<TResult> ListAsync<TState, TResult>(
     Func<IQueryable<TAuthorization>, TState, IQueryable<TResult>> query,
     TState state,
     CancellationToken cancellationToken)
   {
-    throw new NotSupportedException();
+    if (query is null)
+    {
+      throw new ArgumentNullException(nameof(query));
+    }
+
+
+
+    var AllItems = await ListAllItemsAsync(cancellationToken);
+    var AllAsQ = AllItems.AsQueryable();
+    var FilteredItems = query(AllAsQ, state);
+    foreach (var item in FilteredItems)
+    {
+      yield return item;
+    }
   }
 
   // Should not be needed to run, TTL should handle the pruning
@@ -413,8 +539,8 @@ public class OpenIddictDynamoDbAuthorizationStore<TAuthorization> : IOpenIddictA
       {
         ExpressionStatement = $"{nameof(OpenIddictDynamoDbAuthorization.PartitionKey)} = :PK and begins_with({nameof(OpenIddictDynamoDbAuthorization.SortKey)}, :prefix)",
         ExpressionAttributeValues = new Dictionary<string, DynamoDBEntry> {
-                        {":PK", "AUTHORIZATION" },
-                        { ":prefix", "#AUTHORIZATION"},
+                        {":PK", OpenIddictDynamoDbAuthorization.Authorization_PartitionKey },
+                        { ":prefix", OpenIddictDynamoDbAuthorization.Authorization_SortKeyPrefix},
                   }
       },
       FilterExpression = new Expression
@@ -636,8 +762,8 @@ public class OpenIddictDynamoDbAuthorizationStore<TAuthorization> : IOpenIddictA
 
         ExpressionAttributeValues = new()
         {
-          { ":sk", $"#AUTHORIZATION#{authorization.Id}" },
-          { ":PK", "AUTHORIZATION" },
+          { ":sk", $"{OpenIddictDynamoDbAuthorization.Authorization_SortKeyPrefix}{authorization.Id}" },
+          { ":PK", OpenIddictDynamoDbAuthorization.Authorization_PartitionKey },
         }
       }
 

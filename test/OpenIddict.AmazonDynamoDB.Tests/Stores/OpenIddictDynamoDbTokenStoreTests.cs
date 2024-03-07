@@ -85,7 +85,7 @@ public class OpenIddictDynamoDbTokenStoreTests
   }
 
   [Fact]
-  public async Task Should_ThrowNotSupported_When_TryingToGetBasedOnLinq()
+  public async Task ShouldNot_ThrowNotSupported_When_TryingToGetBasedOnLinq()
   {
     // Arrange
     var options = TestUtils.GetOptions(new() { Database = _client });
@@ -93,8 +93,9 @@ public class OpenIddictDynamoDbTokenStoreTests
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(options);
 
     // Act & Assert
-    var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
-      await tokenStore.GetAsync<int, int>(default!, default!, CancellationToken.None));
+  
+    var x = await tokenStore.GetAsync<string, OpenIddictDynamoDbToken>((x, y) => { return x.Where(z => z.Id != y).AsQueryable(); }, "Abcde", CancellationToken.None);
+    Assert.NotNull(x);
   }
 
   [Fact]

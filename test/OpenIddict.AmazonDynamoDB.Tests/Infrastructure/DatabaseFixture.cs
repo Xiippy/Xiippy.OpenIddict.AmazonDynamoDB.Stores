@@ -1,4 +1,5 @@
-﻿using Amazon.DynamoDBv2;
+﻿using System.Diagnostics;
+using Amazon.DynamoDBv2;
 
 namespace OpenIddict.AmazonDynamoDB.Tests;
 
@@ -18,6 +19,10 @@ public class DatabaseFixture : IDisposable
 
   private async Task CreateTable()
   {
+
+    Console.WriteLine($"TableName:{TableName}");
+    Debug.WriteLine($"TableName:{TableName}");
+
     await OpenIddictDynamoDbSetup.EnsureInitializedAsync(TestUtils.GetOptions(new()
     {
       Database = Client,

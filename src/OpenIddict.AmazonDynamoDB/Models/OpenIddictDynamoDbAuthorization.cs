@@ -6,16 +6,19 @@ namespace OpenIddict.AmazonDynamoDB;
 [DynamoDBTable(Constants.DefaultTableName)]
 public class OpenIddictDynamoDbAuthorization
 {
+  public const string Authorization_SortKeyPrefix = "#AUTHORIZATION#";
+  public const string Authorization_PartitionKey = "AUTHORIZATION";
+
   [DynamoDBHashKey]
   public string PartitionKey
   {
-    get => $"AUTHORIZATION";
+    get => Authorization_PartitionKey;
     private set { }
   }
   [DynamoDBRangeKey]
   public string? SortKey
   {
-    get => $"#AUTHORIZATION#{Id}";
+    get => $"{Authorization_SortKeyPrefix}{Id}";
     set { }
   }
   public virtual string Id { get; set; }

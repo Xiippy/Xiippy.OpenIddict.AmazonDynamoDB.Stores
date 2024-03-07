@@ -33,8 +33,9 @@ internal class DynamoDbUtils
       }
     } while (!active);
   }
+  // no need for scan operations any more!
 
-  public static async Task<(string?, List<T>)> Paginate<T>(
+ /* public static async Task<(string?, List<T>)> Paginate<T>(
     IAmazonDynamoDB client,
     int? size = default,
     string? token = default,
@@ -72,5 +73,5 @@ internal class DynamoDbUtils
     var items = page.Select(x => context.FromDocument<T>(x)).ToList();
 
     return (token, items);
-  }
+  }*/
 }
